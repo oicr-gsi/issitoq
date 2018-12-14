@@ -50,6 +50,7 @@
     "chai-exclude": "^1.0.3",
     "chai-http": "^4.0.0",
     "eslint": "^5.1.0",
+    "eslint-plugin-promise": "^4.0.1",
     "husky": "^0.14.3",
     "lint-staged": "^7.2.0",
     "mocha": "^4.0.1",
