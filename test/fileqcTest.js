@@ -554,6 +554,7 @@ describe('FileQC', () => {
         })
         .end((err, res) => {
           expect(res.status).to.equal(200);
+          expect(res.body).to.have.keys(['success', 'errors']);
           expect(res.body.errors).not.to.be.empty;
           expect(res.body.errors[0]).to.match(/^Failed to delete FileQC.*/);
           done();

@@ -24,10 +24,7 @@ zcat "${SQLITE_LOCATION}"/*.tsv.gz | awk -F'\t' '!seen[$45] && NR>1 { print $45"
 ln -sf "${FPR_SMALL_DEST}"/"${now}"-fpr.tsv "${SQLITE_LOCATION}"/fpr-latest.tsv
 
 # reload the db
-echo "Reloading the db"
-pushd "${SQLITE_LOCATION}"
-sqlite3 < "${NABU}"/components/fpr/create_fpr_table.sql
-popd
+. "${NABU}"/components/fpr/reload_fpr.sh
 
 # remove any older file provenance report copies
 cd "${FPR_SMALL_DEST}"

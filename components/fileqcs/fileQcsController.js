@@ -502,11 +502,10 @@ function getFqcsBySwid (swid) {
     pg
       .any(sql, [swid])
       .then(data => {
-        if (!data || data.length == 0) resolve({ fileqcs: [], errors: [] });
-        if (Array.isArray(data)) {
-          resolve({ fileqcs: data, errors: [] });
-        }
-        resolve({ fileqcs: [data], errors: [] });
+        if (!data || data.length == 0)
+          return resolve({ fileqcs: [], errors: [] });
+        if (Array.isArray(data)) return resolve({ fileqcs: data, errors: [] });
+        return resolve({ fileqcs: [data], errors: [] });
       })
       .catch(err => {
         logger.error({ error: err, method: `getFqcsBySwid: ${swid}` });
@@ -614,14 +613,14 @@ function getFqcResultsByProject (project) {
     pg
       .any(select, projectNames)
       .then(data => {
-        resolve({ fileqcs: data ? data : [], errors: [] });
+        return resolve({ fileqcs: data ? data : [], errors: [] });
       })
       .catch(err => {
         logger.error({
           error: err,
           method: `getFqcResultsByProject:${project}`
         });
-        reject(generateError(500, 'Error retrieving records'));
+        return reject(generateError(500, 'Error retrieving records'));
       });
   });
 }
@@ -638,11 +637,11 @@ function getFqcResultsBySwids (swids) {
     pg
       .any(sql)
       .then(data => {
-        resolve({ fileqcs: data ? data : [], errors: [] });
+        return resolve({ fileqcs: data ? data : [], errors: [] });
       })
       .catch(err => {
         logger.error({ error: err, method: 'getFqcResultsBySwids' });
-        reject(generateError(500, 'Error retrieving records'));
+        return reject(generateError(500, 'Error retrieving records'));
       });
   });
 }
@@ -658,7 +657,7 @@ function addSingleFqc (fqc) {
       })
       .then(data => {
         data['errors'] = [];
-        resolve(data);
+        return resolve(data);
       })
       .catch(err => {
         logger.error({ error: err, method: `addSingleFqc:${fqc.fileswid}` });
@@ -696,47 +695,58 @@ function addFqcs (fqcs) {
 const deleteFqcs = (fileQcIds, username) => {
   const extraValidUserName = validateUsername(username);
   const fqcPlaceholders = getIndexedPlaceholders(fileQcIds);
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const delete_stmt = `UPDATE FileQC SET deleted = TRUE, 
       comment = CONCAT(comment, '. Deleted by ${extraValidUserName} at ${new Date()}')
       WHERE fileqcid IN (${fqcPlaceholders}) RETURNING fileqcid`;
-    pg
-      .any(delete_stmt, fileQcIds)
-      .then(data => {
-        data = data.map(d => d.fileqcid);
-        const undeleted = fileQcIds.filter(id => data.indexOf(id) == -1);
-        const yay = [];
-        if (data.length) {
-          yay.push(`Deleted FileQC(s) ${data.join(', ')}. `);
-        }
-        const nay = [];
-        if (undeleted.length) {
-          nay.push(`Failed to delete FileQC(s) ${undeleted.join(', ')}.`);
-          pg
-            .any(
-              `SELECT fileqcid FROM FileQC WHERE fileqcid IN (${undeleted.join(
-                ','
-              )})`
-            )
-            .then(data => {
-              const notInDb = undeleted.filter(id => !data.includes(id));
-              if (notInDb.length) {
-                nay.push(`FileQC ID(s) do not exist: ${notInDb.join(', ')}`);
-              }
-              return resolve({ success: yay, errors: nay });
-            })
-            .catch(err => {
-              logger.error({ error: err, method: 'deleteFqcs' });
-              return resolve({ success: yay, errors: nay });
-            });
-        } else {
-          return resolve({ success: yay, errors: nay });
-        }
-      })
-      .catch(err => {
-        logger.error({ error: err, method: `deleteFqcs:${username}` });
-        return reject(generateError(500, 'Failed to delete FileQC records'));
-      });
+    try {
+      const deletionResult = await pg
+        .any(delete_stmt, fileQcIds)
+        .then(data => {
+          const deletedIds = data.map(d => d.fileqcid);
+          const undeletedIds = fileQcIds.filter(
+            id => deletedIds.indexOf(id) == -1
+          );
+          return { deleted: deletedIds, undeleted: undeletedIds };
+        })
+        .catch(err => {
+          logger.error({ error: err, method: `deleteFqcs:${username}` });
+          return generateError(500, 'Failed to delete FileQC records');
+        });
+      const yay = [];
+      const nay = [];
+      if (deletionResult.deleted.length) {
+        yay.push(`Deleted FileQC(s) ${deletionResult.deleted.join(', ')}. `);
+      }
+      if (deletionResult.undeleted.length) {
+        nay.push(
+          `Failed to delete FileQC(s) ${deletionResult.undeleted.join(', ')}.`
+        );
+        pg
+          .any(
+            `SELECT fileqcid FROM FileQC WHERE fileqcid IN (${deletionResult.undeleted.join(
+              ','
+            )})`
+          )
+          .then(data => {
+            const notInDb = deletionResult.undeleted.filter(
+              id => !data.includes(id)
+            );
+            if (notInDb.length) {
+              nay.push(`FileQC ID(s) do not exist: ${notInDb.join(', ')}`);
+            }
+            return resolve({ success: yay, errors: nay });
+          })
+          .catch(err => {
+            logger.error({ error: err, method: 'deleteFqcs' });
+            return resolve({ success: yay, errors: nay });
+          });
+      } else {
+        return resolve({ success: yay, errors: nay });
+      }
+    } catch (e) {
+      return reject(e);
+    }
   });
 };
 

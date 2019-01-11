@@ -1,12 +1,14 @@
 language: node_js
 node_js:
   - "9"
+  - "10"
 
 addons:
   postgresql: "9.5"
 
 services:
   - postgresql
+  - docker
 
 env:
   global:
@@ -15,24 +17,17 @@ env:
 
 before_install:
   - npm install -g npm@5.7.0
-  - npm install -g npm@5.7.0
+  - docker pull boxfuse/flyway
 
 install:
-  - npm install # note: cannot use npm ci as it will remove flyway
-  - rm node_modules/.bin/flyway
-  - cd node_modules/.bin && ln -s ../flyway/lib/flyway-5.0.7/flyway flyway && cd - # re-link Flyway after npm install
-  - ls -lh node_modules/.bin
-  - npm install -g snyk
+  - npm install
 
 before_script:
   - psql -c "create database qcdb_test;" -U postgres
-  - psql qcdb_test -U postgres < test/migrations/create_test_fileqc.sql
-  - npm run fw:test-clean
-  - npm run fw:test-migrate
-  - cd test && sqlite3 fpr.db < migrations/create_test_fpr.sql && cd ..
+  - psql qcdb_test -U postgres < test/create_test_fileqc.sql
+  - cp test/example-flyway.conf test/flyway.conf
 
 script: 
-  - snyk test
   - npm run lint
   - npm run test
 

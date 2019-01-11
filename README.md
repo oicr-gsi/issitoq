@@ -9,6 +9,7 @@
   * NPM (comes with Node)
   * PostgreSQL 9.5 or higher
   * SQLite3
+  * Docker (for database migrations)
 
 Checking for node:
 ```
@@ -26,14 +27,6 @@ SQLite3 may need to be built from source in order to comply with the version of 
 $ npm uninstall sqlite3
 $ npm install sqlite3 --local --build-from-source
 ```
-
-### Linking Flyway after `npm install`
-Flyway is used here as a library rather than as a package. If it doesn't work after an `npm install`, it may need to be re-symlinked using the following:
-```
-$ rm node_modules/.bin/flyway
-$ cd node_modules/.bin && ln -s ../flyway/lib/flyway-5.0.7/flyway flyway && cd -
-``` 
-Note: **Do not use `npm ci`** on this project, as it will remove the Flyway library.
 
 ## Setting environment variables
 Create a `.env` file and populate it. The `.env-example` file provides a template for this.
@@ -54,20 +47,27 @@ $ sudo -u postgres psql
 # \q
 ```
 
-## Migrating the PostgreSQL database (FileQCs)
-When setting up the database for the first time:
-  * Create a file in `conf/` called `flyway.conf` and add to it your database url, user, and password (similar to the `.env` file. The `conf/example-flyway.conf` file provides a template for this.
-  * Perform the initial migration using the following:
-    ```
-    $ npm run fw:migrate
-    ```
+## Migrating the PostgreSQL database using Docker
+It is possible to manually apply database migration files (in the `sql` folder, named like `V#__.*.sql`), but using
+Flyway allows database migrations to be applied in a prdictable order, and only once. To use Docker for database
+migrations: Create a file in `conf/` called `flyway.conf` and add to it your database url, user, and password (similar
+to the `.env` file. The `conf/example-flyway.conf` file provides a template for this.
 
-After that initial setup, if any new updates require a database migration, use the same command:
+After that initial setup, use the following to run the initial migration. Later, if any new updates require a database
+migration, use the same command:
 ```
-$ npm run fw:migrate
+npm run fw:migrate
 ```
 
-## Setting up the SQLite database ([File Provenance Report](https://github.com/oicr-gsi/provenance))
+If the database needs to be wiped clean and reset, this can be done using the following:
+```
+npm run fw:clean
+npm run fw:migrate
+```
+You may need to run `docker pull boxfuse/flyway:5.2.4` before running this command for the first time.
+Note that `--network=host` in `fw:clean` and `fw:migrate` is particularly important if you're using `localhost` in `flyway.url`.
+
+## Setting up the SQLite database (contains columns from the [File Provenance Report](https://github.com/oicr-gsi/provenance))
 Nabu uses a SQLite database to store certain fields from the File Provenance Report. This SQLite database should be created in a directory outside of the Nabu directory.
 ```
 $ mkdir /path/to/sqlite/dir
@@ -92,6 +92,22 @@ $ npm run lint
 Linter settings are in .eslintrc.json .
 
 ## Testing
+
+Create a file in `test/` called `flyway.conf`. The `test/example-flyway.conf` file provides a template for this. Use
+these variables to create the test database below.
+
+### Create a PostgreSQL database for the tests
+```
+$ psql postgres -U postgres
+
+# create database ${TEST_DATABASE};
+# create user ${TEST_USER};
+# alter role ${TEST_USER} with password '${TEST_PASSWORD}';
+# grant all on database ${TEST_DATABASE} to ${TEST_USER};
+# \q
+```
+
+### Run the tests
 Run tests using:
 ```
 $ npm run test
